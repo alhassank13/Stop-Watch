@@ -1,0 +1,202 @@
+/*
+===================================================================================
+Project Title   : Mini_Project2 - Stop Watch
+Author          : ALHassan Khaled
+Description     : This project implements a stop watch functionality.
+Created on      : February 2, 2024
+===================================================================================
+*/
+
+
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+
+enum states {
+    cleared,
+    set
+};
+
+/** Function Prototypes **/
+void INT0_Init(void);
+void INT1_Init(void);
+void INT2_Init(void);
+void Timer1_Init(void);
+void UpdateStopWatchDigits(void);
+void Display(void);
+
+/** Global Variables **/
+char g_clock[6];
+char timer1_interrupt_flag;
+
+/** Main Function **/
+int main(void) {
+    /** Configuration **/
+
+    // 7 Segments Configuration (Common Anode)
+    DDRA |= 0x3F;  // Configure first 6 pins in PORTA as OUTPUT for segments
+    DDRC |= 0x0F;  // Configure first four pins of PORTC as OUTPUT for decoder
+
+    PORTA |= 0x01;  // With these bits, control (6 digits 7-segment) to choose which digit will take the output of 7447 decoder
+    PORTC = 0;      // Initialize the six 7-segments with value 0 by clear the first four bits in PORTC
+
+    // Enable global interrupt flag (I-bit) in the Status Register (SREG)
+    SREG |= (1 << 7);
+
+    /** Timer1 Initialization **/
+    Timer1_Init();
+
+    /** INTERRUPT Initialization **/
+    INT0_Init();
+    INT1_Init();
+    INT2_Init();
+
+    while (1) {
+        Display();
+        if (timer1_interrupt_flag == set) {
+            UpdateStopWatchDigits();
+            timer1_interrupt_flag = cleared;
+        }
+    }
+}
+
+/** Function to initialize external interrupt INT0 **/
+void INT0_Init(void) {
+    // Configure PD2 as input (INT0 pin)
+    DDRD &= ~(1 << PD2);
+
+    // Enable internal pull-up resistor for PD2
+    PORTD |= (1 << PD2);
+
+    // Configure interrupt sense control bit for falling edge trigger (ISC01 = 1)
+    MCUCR |= (1 << ISC01);
+
+    // Enable external interrupt INT0
+    GICR |= (1 << INT0);
+}
+
+/** Function to initialize external interrupt INT1 **/
+void INT1_Init(void) {
+    // Configure PD3 as input (INT1 pin)
+    DDRD &= ~(1 << PD3);
+
+    // Configure interrupt sense control bits for rising edge trigger (ISC10 = 1, ISC11 = 1)
+    MCUCR |= (1 << ISC10) | (1 << ISC11);
+
+    // Enable external interrupt INT1
+    GICR |= (1 << INT1);
+}
+
+/** Function to initialize external interrupt INT2 **/
+void INT2_Init(void) {
+    // Configure PB2 as input (INT2 pin)
+    DDRB &= ~(1 << PB2);
+
+    // Enable internal pull-up resistor for PB2
+    PORTB |= (1 << PB2);
+
+    // Configure interrupt sense control bit for falling edge trigger (ISC2 = 0)
+    MCUCSR &= ~(1 << ISC2);
+
+    // Enable external interrupt INT2
+    GICR |= (1 << INT2);
+}
+
+/** Function to configure and initialize Timer1 for CTC mode **/
+void Timer1_Init(void) {
+    TCNT1 = 0;          // Initial value
+    OCR1A = 1000;       // Compare value for 1 second interrupt (1 kHz timer with prescaler 1024)
+    TIMSK |= (1 << OCIE1A);  // Enable Timer1 Output Compare A match interrupt
+
+    // Configure timer control register TCCR1A
+    TCCR1A = (1 << FOC1A);  // Disconnect OC1A, CTC Mode, and FOC1A set for CTC
+
+    // Configure timer control register TCCR1B
+    TCCR1B = (1 << CS10) | (1 << CS12) | (1 << WGM12);  // CTC Mode, prescaler=1024
+}
+
+/** Function to update stopwatch digits **/
+void UpdateStopWatchDigits(void) {
+    g_clock[0]++; // Every Timer1 interrupt (every second) increase seconds
+    if (g_clock[0] == 10) {
+        g_clock[0] = 0;
+        g_clock[1]++;
+        if (g_clock[1] == 6 && g_clock[0] == 0) {
+            g_clock[1] = 0;
+            g_clock[2]++;
+        }
+    }
+    if (g_clock[2] == 10) {
+        g_clock[2] = 0;
+        g_clock[3]++;
+        if (g_clock[3] == 6 && g_clock[2] == 0) {
+            g_clock[3] = 0;
+            g_clock[4]++;
+        }
+    }
+    if (g_clock[4] == 10) {
+        g_clock[4] = 0;
+        g_clock[5]++;
+        if (g_clock[5] == 10 && g_clock[4] == 0) {
+            // Here, we will reach our maximum stopwatch (99 hours: 59 minutes: 59 seconds)
+            // No enough bits for hours, so reset the stopwatch
+            for (int i = 0; i < 6; i++) {
+                g_clock[i] = 0;
+            }
+            TCNT1 = 0;  // Reset Timer register to start counting from zero
+        }
+    }
+}
+
+/** Function to display stopwatch digits on 7-segment display **/
+void Display(void) {
+    int digit;
+    for (digit = 0; digit < 6; digit++) {
+        // Select the current digit by shifting a '1' to the left
+        PORTA = 1 << digit;
+
+        // Display the corresponding value for the current digit on PORTC
+        PORTC = g_clock[digit];
+
+        // Introduce a short delay for visibility
+        _delay_ms(3);
+    }
+}
+
+/** External Interrupt Service Routine for Reset (INT0) **/
+ISR(INT0_vect) {
+    SREG |= (1 << 7);  // Enable interrupts nesting
+
+    // Reset stopwatch
+    for (int i = 0; i < 6; i++) {
+        g_clock[i] = 0;
+    }
+    TCNT1 = 0;  // Reset Timer register
+}
+
+/** External Interrupt Service Routine for Pause (INT1) **/
+ISR(INT1_vect) {
+    SREG |= (1 << 7);  // Enable interrupts nesting
+
+    // Pause stopwatch by stopping Timer1 (no clock source)
+    TCCR1B &= ~(1 << CS12);
+    TCCR1B &= ~(1 << CS11);
+    TCCR1B &= ~(1 << CS10);
+}
+
+/** External Interrupt Service Routine for Resume (INT2) **/
+ISR(INT2_vect) {
+    SREG |= (1 << 7);  // Enable interrupts nesting
+
+    // Resume stopwatch by reactivating Timer1 (connect to clock source again)
+    // Enable _clock with prescaler=1024
+    TCCR1B |= (1 << CS10);
+    TCCR1B |= (1 << CS12);
+}
+
+/** Timer1 CTC Interrupt Service Routine **/
+ISR(TIMER1_COMPA_vect) {
+    SREG |= (1 << 7);  // Enable interrupts nesting
+    timer1_interrupt_flag = set;
+}

@@ -1,0 +1,254 @@
+/*
+ * StopWatch.c
+ *
+ *  Created on: Feb 2, 2024
+ *      Author: ALHassan Khaled
+ */
+
+
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+
+
+
+
+/**>>>>>>>>>>>>>>>>>>>			FUNCTION PROTOTYPE			<<<<<<<<<<<<<<<<<<<<**/
+void INT0_Init(void);
+void INT1_Init(void);
+void INT2_Init(void);
+void Timer1_Init(void);
+void DisplayNumber(uint8_t number);
+
+
+/**>>>>>>>>>>>>>>>>>>>			GLOBALE VARIABLRS			<<<<<<<<<<<<<<<<<<<<**/
+unsigned int g_num = 0;
+char g_flage = 0;
+/*
+ no_seconds_digit1 = clock[0]
+ no_seconds_digit2 = clock[1]
+ no_minutes_digit1 = clock[2]
+ no_minutes_digit2 = clock[3]
+ no_hours_digit1 = clock[4]
+ no_hours_digit2 = clock[5]
+*/
+char g_clock[6];
+
+/**>>>>>>>>>>>>>>>>>>>			START MAIN			<<<<<<<<<<<<<<<<<<<<**/
+int main(void){
+	/**VARIABLES**/
+
+	/**>>>>>>>>>>>>>>>>>>>			START CONFIGRATION			<<<<<<<<<<<<<<<<<<<<**/
+
+	/**7 Segments Configuration**/
+	DDRA |= 0x3F;   /*Configure first 6 pins in PORTA  as OUTPUT*/
+	DDRC |= 0x0F;	/*Configure first four pins of PORTC as output pins */
+
+
+	PORTA |= 0x01;  //with these bits,I can control (6 digits 7-segment) to choose which digit will take the output of 7447 decoder
+
+	PORTC = 0;      /*Initialize the six 7-segments with value 0 by clear the first four bits in PORTC*/
+
+	/** Buttons Configuration**/
+
+	/*Configure PIN2 and PIN3  in PORTD as INPUT*/
+	/*PIN2(INT0  =>  reset)*/
+	/*PIN3(INT1  =>  paused)*/
+	DDRD &= ~(1<<PD2) &~(1<<PD3);
+
+	/*Configure PIN2 in PORTB as INPUT*/
+	/*PIN2(INT2  =>  resumed)*/
+	DDRB &= ~(1<<PB2);
+
+
+	PORTD |= (1<<PD2);		/* Make the internal pull-up resistor for PIN2 in PORTD ON*/
+	PORTB |= (1<<PB2);		/* Make the internal pull-up resistor for PIN2 in PORTB ON*/
+
+	/**>>>>>>>>>>>>>>>>>>>			END CONFIGRATION			<<<<<<<<<<<<<<<<<<<<**/
+
+	/**Timer1 Initialization**/
+	Timer1_Init();
+	/**INTERRUPT Initialization**/
+	INT0_Init();
+	INT1_Init();
+	INT2_Init();
+
+
+
+	while(1){
+
+		//		_delay_ms(700);
+		//		// check if overflow occurs at the 7-segment as its maximum count is 9
+		//		if((PORTC & 0x0F) == 9)
+		//		{
+		//			g_num = 0;
+		//			PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+		//			PORTA |= (1<<PA0);
+		//			_delay_ms(10);
+		//			PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+		//
+		//			PORTA &= ~(1<<PA1);
+		//			_delay_ms(10);
+		//			PORTA &= ~(1<<PA2);
+		//			_delay_ms(10);
+		//			PORTA &= ~(1<<PA3);
+		//			_delay_ms(10);
+		//			PORTA &= ~(1<<PA4);
+		//			_delay_ms(10);
+		//			PORTA &= ~(1<<PA5);
+		//			_delay_ms(10);
+		//			PORTA &= ~(1<<PA6);
+		//			_delay_ms(10);
+		//
+		//		}
+		//		else
+		//		{
+		//			g_num++;
+		//			PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+		//			PORTA |= (1<<PA0);
+		//			_delay_ms(10);
+		//			PORTA &= ~(1<<PA1);
+		//			_delay_ms(10);
+		//			PORTA &= ~(1<<PA2);
+		//			_delay_ms(10);
+		//			PORTA &= ~(1<<PA3);
+		//			_delay_ms(10);
+		//			PORTA &= ~(1<<PA4);
+		//			_delay_ms(10);
+		//			PORTA &= ~(1<<PA5);
+		//			_delay_ms(10);
+		//			PORTA &= ~(1<<PA6);
+		//			_delay_ms(10);
+		//
+		//		}
+		DisplayNumber(g_num % 100);
+
+		// Example: Display stopwatch value on 7-segments
+		PORTA = (PORTA & 0xC0) | ((g_num / 100) & 0x3F);
+
+		//				if(g_flage == 1){
+		//
+		//					while((PINB&(1<<PB2)) && (PIND&(1<<PD2)) ){
+		//
+		//						PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+		//
+		//					}
+		//					g_flage=0;
+		//				}
+		//
+		//		if(g_flage == 2){
+		//			g_num = 0;
+		//			PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+		////			break;
+		//		}
+		//
+		//		if(g_flage == 0){
+		////			g_num ++;
+		//			PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+		////			break;
+		//		}
+
+
+
+
+	}/**END WHILE**/
+}/**END MAIN**/
+
+
+/**>>>>>>>>>>>>>>>>>>>			FUNCTION DEFINTION			<<<<<<<<<<<<<<<<<<<<**/
+// Function to initialize external interrupt INT0
+void INT0_Init(void){
+	//    // Configure PD2 as input (INT0 pin)
+	//    DDRD &= ~(1 << PD2);
+
+	// Configure interrupt sense control bits for falling edge trigger (ISC01 = 1, ISC00 = 1)
+	MCUCR |= (1 << ISC01) | (1 << ISC00);
+
+	// Enable external interrupt INT0
+	GICR |= (1 << INT0);
+
+	// Enable global interrupt flag (I-bit) in the Status Register (SREG)
+	SREG |= (1 << 7);
+}
+
+// Function to initialize external interrupt INT1
+void INT1_Init(void){
+	//    // Configure PD3 as input (INT1 pin)
+	//    DDRD &= ~(1 << PD3);
+
+	// Configure interrupt sense control bits for rising edge trigger (ISC10 = 1, ISC11 = 1)
+	MCUCR |= (1 << ISC10) | (1 << ISC11);
+
+	// Enable external interrupt INT1
+	GICR |= (1 << INT1);
+
+	// Enable global interrupt flag (I-bit) in the Status Register (SREG)
+	SREG |= (1 << 7);
+}
+
+// Function to initialize external interrupt INT2
+void INT2_Init(void){
+
+	// Configure interrupt sense control bit for falling edge trigger for INT2
+	MCUCSR &= ~(1 << ISC2);
+
+	// Enable external interrupt INT2
+	GICR |= (1 << INT2);
+
+	// Enable global interrupt flag (I-bit) in the Status Register (SREG)
+	SREG |= (1 << 7);
+}
+
+/** Function to configure and initialize Timer1 for CTC mode **/
+void Timer1_Init(void) {
+	TCCR1B |= (1 << WGM12);  // Set CTC (Clear Timer on Compare Match) mode
+	TCCR1B |= (1 << CS12);   // Set prescaler to 256
+	OCR1A = 3906;            // Set the compare value for 1s delay (1MHz / (256 * 1) = 3906)
+	TIMSK |= (1 << OCIE1A);  // Enable Timer1 output compare A match interrupt
+}
+
+
+//Reset
+ISR(INT0_vect){
+	g_num = 0;
+	//	PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+	//	g_flage = 2;
+}
+
+//paused
+ISR(INT1_vect){
+	// Enable global interrupt flag (I-bit) in the Status Register (SREG)
+	SREG |= (1 << 7);
+	while((PINB&(1<<PB2)) && (PIND&(1<<PD2)) ){
+
+		PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+
+	}
+	//		g_flage = 1;
+}
+
+
+//resumed
+ISR(INT2_vect){
+	//	g_flage = 0;
+	PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+
+
+}
+
+/** Timer1 CTC Interrupt Service Routine **/
+ISR(TIMER1_COMPA_vect) {
+	if (!paused) {
+		g_num++;
+	}
+}
+
+
+void UpdateStopWatchDigits(void){
+
+
+}
+
+
+

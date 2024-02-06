@@ -1,0 +1,192 @@
+/*
+ * StopWatch.c
+ *
+ *  Created on: Feb 2, 2024
+ *      Author: ALHassan Khaled
+ */
+
+
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+
+
+/**>>>>>>>>>>>>>>>>>>>			FUNCTION PROTOTYPE			<<<<<<<<<<<<<<<<<<<<**/
+void INT0_Init(void);
+void INT1_Init(void);
+void INT2_Init(void);
+
+
+/**>>>>>>>>>>>>>>>>>>>			GLOBALE VARIABLRS			<<<<<<<<<<<<<<<<<<<<**/
+unsigned int g_num = 0;
+char g_flage = 0;
+
+
+int main(void){
+	/**VARIABLES**/
+
+	/**>>>>>>>>>>>>>>>>>>>			START CONFIGRATION			<<<<<<<<<<<<<<<<<<<<**/
+
+	/**7 Segments Configuration**/
+	DDRA |= 0x7F;   /*Configure first 6 pins in PORTA  as OUTPUT*/
+	DDRC |= 0x0F;	/*Configure first four pins of PORTC as output pins */
+
+
+	PORTA |= 0x7F;  /*Common Anode make first 6 pins in PORTA LOW*/
+	PORTC &= 0xF0;  /*Initialize the six 7-segments with value 0 by clear the first four bits in PORTC*/
+
+	/** Buttons Configuration**/
+
+	/*Configure PIN2 and PIN3  in PORTD as INPUT*/
+	/*PIN2(INT0  =>  reset)*/
+	/*PIN3(INT1  =>  paused)*/
+	DDRD &= ~(1<<PD2) &~(1<<PD3);
+
+	/*Configure PIN2 in PORTB as INPUT*/
+	/*PIN2(INT2  =>  resumed)*/
+	DDRB &= ~(1<<PB2);
+
+
+	PORTD |= (1<<PD2);		/* Make the internal pull-up resistor for PIN2 in PORTD ON*/
+	PORTB |= (1<<PB2);		/* Make the internal pull-up resistor for PIN2 in PORTB ON*/
+
+	/**>>>>>>>>>>>>>>>>>>>			END CONFIGRATION			<<<<<<<<<<<<<<<<<<<<**/
+
+
+	/**CALL INTERRUPT FUNCTIONS**/
+	INT0_Init();
+	INT1_Init();
+	INT2_Init();
+
+
+
+	while(1){
+
+		_delay_ms(700);
+		// check if overflow occurs at the 7-segment as its maximum count is 9
+		if((PORTC & 0x0F) == 9)
+		{
+			g_num = 0;
+			PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+			//			PORTA |= (1<<PA0);
+			//			_delay_ms(10);
+			//			PORTA &= ~(1<<PA1);
+			//			_delay_ms(10);
+			//			PORTA &= ~(1<<PA2);
+			//			_delay_ms(10);
+			//			PORTA &= ~(1<<PA3);
+			//			_delay_ms(10);
+			//			PORTA &= ~(1<<PA4);
+			//			_delay_ms(10);
+			//			PORTA &= ~(1<<PA5);
+			//			_delay_ms(10);
+			//			PORTA &= ~(1<<PA6);
+			//			_delay_ms(10);
+
+		}
+		else
+		{
+			g_num++;
+			PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+			//			PORTA |= (1<<PA0);
+			//			_delay_ms(10);
+			//			PORTA &= ~(1<<PA1);
+			//			_delay_ms(10);
+			//			PORTA &= ~(1<<PA2);
+			//			_delay_ms(10);
+			//			PORTA &= ~(1<<PA3);
+			//			_delay_ms(10);
+			//			PORTA &= ~(1<<PA4);
+			//			_delay_ms(10);
+			//			PORTA &= ~(1<<PA5);
+			//			_delay_ms(10);
+			//			PORTA &= ~(1<<PA6);
+			//			_delay_ms(10);
+
+		}
+
+		if(g_flage == 1){
+
+			while((PINB&(1<<PB2))){
+
+				PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+
+			}
+		}
+
+
+	}/**END WHILE**/
+}/**END MAIN**/
+
+
+/**>>>>>>>>>>>>>>>>>>>			FUNCTION DEFINTION			<<<<<<<<<<<<<<<<<<<<**/
+// Function to initialize external interrupt INT0
+void INT0_Init(void){
+	//    // Configure PD2 as input (INT0 pin)
+	//    DDRD &= ~(1 << PD2);
+
+	// Configure interrupt sense control bits for falling edge trigger (ISC01 = 1, ISC00 = 1)
+	MCUCR |= (1 << ISC01) | (1 << ISC00);
+
+	// Enable external interrupt INT0
+	GICR |= (1 << INT0);
+
+	// Enable global interrupt flag (I-bit) in the Status Register (SREG)
+	SREG |= (1 << 7);
+}
+
+// Function to initialize external interrupt INT1
+void INT1_Init(void){
+	//    // Configure PD3 as input (INT1 pin)
+	//    DDRD &= ~(1 << PD3);
+
+	// Configure interrupt sense control bits for rising edge trigger (ISC10 = 1, ISC11 = 1)
+	MCUCR |= (1 << ISC10) | (1 << ISC11);
+
+	// Enable external interrupt INT1
+	GICR |= (1 << INT1);
+
+	// Enable global interrupt flag (I-bit) in the Status Register (SREG)
+	SREG |= (1 << 7);
+}
+
+// Function to initialize external interrupt INT2
+void INT2_Init(void){
+
+	// Configure interrupt sense control bit for falling edge trigger for INT2
+	MCUCSR &= ~(1 << ISC2);
+
+	// Enable external interrupt INT2
+	GICR |= (1 << INT2);
+
+	// Enable global interrupt flag (I-bit) in the Status Register (SREG)
+	SREG |= (1 << 7);
+}
+
+
+//Reset
+ISR(INT0_vect){
+	g_num = 0;
+	PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+
+}
+
+//paused
+ISR(INT1_vect){
+	//	while((PINB&(1<<PB2))){
+	//
+	//		PORTC = (PORTC & 0xF0) | (g_num & 0x0F);
+	//
+	//	}
+}
+
+
+//resumed
+ISR(INT2_vect){
+
+}
+
+
+
+
