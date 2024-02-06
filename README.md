@@ -29,10 +29,3 @@ This repository contains the source code and hardware configuration for a Stop W
     -   Configure External Interrupt INT1 with a rising edge to pause the Stop Watch time.
     -   Configure External Interrupt INT2 with a falling edge to resume the Stop Watch time.
 
-## Usage
-
-1.  Clone the repository: `git clone https://github.com/your-username/atmega32-stop-watch.git`
-2.  Set up the hardware as per the specifications.
-3.  Compile the code using an AVR compiler.
-4.  Flash the compiled code onto the ATmega32 microcontroller.
-5.  Power up the system and use the configured buttons for control.
